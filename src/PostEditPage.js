@@ -1,15 +1,16 @@
 import { request } from "./api.js";
 import Editor from "./Editor.js";
-import { setItem, getItem } from "./storage.js";
+import { setItem, getItem, removeItem } from "./storage.js";
+import LinkButton from "./LinkButton.js";
 
 export default function PostEditPage({ $target, initialState }) {
   const $page = document.createElement("div");
 
   this.state = initialState;
 
-  const TEMP_POST_SAVE_KEY = `temp-post-${this.state.postId}`;
+  let postLocalSaveKey = `temp-post-${this.state.postId}`;
 
-  const post = getItem(TEMP_POST_SAVE_KEY, {
+  const post = getItem(postLocalSaveKey, {
     title: "",
     content: "",
   });
@@ -18,31 +19,67 @@ export default function PostEditPage({ $target, initialState }) {
 
   const editor = new Editor({
     $target: $page,
-    initialState: this.state.post,
+    initialState: post,
     onEditing: (post) => {
       if (timer !== null) {
         clearTimeout(timer);
       }
-      timer = setTimeout(() => {
-        setItem(TEMP_POST_SAVE_KEY, {
+      timer = setTimeout(async () => {
+        setItem(postLocalSaveKey, {
           ...post,
-          tempSaveData: new Date(),
+          tempSaveDate: new Date(),
         });
-      }, 1000);
+
+        const isNew = this.state.postId === "new";
+        if (isNew) {
+          const createdPost = await request("/posts", {
+            method: "POST",
+            body: JSON.stringify(post),
+          });
+          history.replaceState(null, null, `/posts/${createdPost.id}`);
+          removeItem(postLocalSaveKey);
+
+          this.setState({
+            postId: createdPost.id,
+          });
+        } else {
+          await request(`/posts/${post.id}`, {
+            method: "PUT",
+            body: JSON.stringify(post),
+          });
+          removeItem(postLocalSaveKey);
+        }
+      }, 2000);
     },
   });
 
   this.setState = async (nextState) => {
-    console.log(this.state.postId, nextState.postId);
     if (this.state.postId !== nextState.postId) {
+      postLocalSaveKey = `temp-post-${nextState.postId}`;
       this.state = nextState;
-      await fetchPost();
+
+      if (this.state.postId === "new") {
+        const post = getItem(postLocalSaveKey, {
+          title: "",
+          content: "",
+        });
+        this.render();
+        editor.setState(post);
+      } else {
+        await fetchPost();
+      }
+
       return;
     }
     this.state = nextState;
     this.render();
 
-    editor.setState(this.state.post);
+    editor.setState(
+      this.state.post || {
+        title: "",
+        content: "",
+      }
+    );
   };
 
   this.render = () => {
@@ -55,6 +92,21 @@ export default function PostEditPage({ $target, initialState }) {
     if (postId !== "new") {
       const post = await request(`/posts/${postId}`);
 
+      const tempPost = getItem(postLocalSaveKey, {
+        title: "",
+        content: "",
+      });
+
+      if (tempPost.tempSaveDate && tempPost.tempSaveDate > post.updated_at) {
+        if (confirm("저장되지 않은 임시 데이터가 있습니다. 불러올까요?")) {
+          this.setState({
+            ...this.state,
+            post: tempPost,
+          });
+          return;
+        }
+      }
+
       this.setState({
         ...this.state,
         post,
@@ -62,5 +114,11 @@ export default function PostEditPage({ $target, initialState }) {
     }
   };
 
-  fetchPost();
+  new LinkButton({
+    $target: $page,
+    initialState: {
+      text: "목록으로 이동",
+      link: "/",
+    },
+  });
 }

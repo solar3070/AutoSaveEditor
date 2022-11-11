@@ -1,4 +1,4 @@
-export default function PostList({
+export default function Editor({
   $target,
   initialState = {
     title: "",
