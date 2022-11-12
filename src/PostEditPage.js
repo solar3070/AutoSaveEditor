@@ -71,7 +71,9 @@ export default function PostEditPage({ $target, initialState }) {
 
       return;
     }
-    this.state = nextState;
+    if (nextState.post) {
+      this.state = nextState;
+    }
     this.render();
 
     editor.setState(
