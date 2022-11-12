@@ -14,13 +14,9 @@ export default function PostList({ $target, initialState }) {
   this.render = () => {
     $postList.innerHTML = `
       <ul>
-        ${this.state
-          .map(
-            (post) => `
-          <li data-id=${post.id}>${post.title}</li>
-        `
-          )
-          .join("")}
+        ${this.state.map((post) =>
+          `<li data-id=${post.id}>${post.title}</li>`
+          ).join("")}
       </ul>
     `;
   };
